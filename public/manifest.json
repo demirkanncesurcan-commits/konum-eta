@@ -1,0 +1,9 @@
+{
+  "name": "Ne Kadar Kaldı?",
+  "short_name": "NeKadarKaldı",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#10141F",
+  "theme_color": "#10141F",
+  "icons": []
+}

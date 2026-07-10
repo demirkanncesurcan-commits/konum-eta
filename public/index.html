@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Ne Kadar Kaldı?</title>
+<link rel="manifest" href="/manifest.json">
+<style>
+  :root{
+    --bg:#10141F;
+    --bg-elevated:#171D2C;
+    --text:#EDEEF3;
+    --text-dim:#8B92A8;
+    --accent:#F2A65A;
+    --accent-dim:#3A2E22;
+    --teal:#3FA796;
+    --border:#252C3E;
+    --radius:18px;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    min-height:100vh;
+    background:var(--bg);
+    color:var(--text);
+    font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    padding:32px 20px 60px;
+  }
+  .brand{
+    font-size:15px;
+    letter-spacing:2px;
+    text-transform:uppercase;
+    color:var(--text-dim);
+    margin-bottom:6px;
+  }
+  h1{
+    font-size:28px;
+    margin:0 0 36px;
+    font-weight:700;
+    text-align:center;
+  }
+  .card{
+    width:100%;
+    max-width:420px;
+    background:var(--bg-elevated);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    padding:28px 24px;
+  }
+  .send-btn{
+    width:100%;
+    padding:22px;
+    font-size:19px;
+    font-weight:700;
+    color:#10141F;
+    background:var(--accent);
+    border:none;
+    border-radius:16px;
+    cursor:pointer;
+    margin-bottom:24px;
+    transition:transform .15s ease, opacity .15s ease;
+  }
+  .send-btn:active{transform:scale(0.98);}
+  .send-btn:disabled{opacity:.5;cursor:default;}
+  .label{
+    font-size:13px;
+    color:var(--text-dim);
+    margin:20px 0 10px;
+    letter-spacing:.5px;
+  }
+  .option-row{
+    display:flex;
+    gap:10px;
+  }
+  .opt{
+    flex:1;
+    padding:14px 6px;
+    text-align:center;
+    border:1px solid var(--border);
+    border-radius:12px;
+    cursor:pointer;
+    font-size:14px;
+    color:var(--text-dim);
+    background:transparent;
+    transition:all .15s ease;
+  }
+  .opt.selected{
+    border-color:var(--accent);
+    color:var(--accent);
+    background:var(--accent-dim);
+    font-weight:600;
+  }
+  .share-box{
+    margin-top:24px;
+    padding:18px;
+    background:var(--bg);
+    border:1px solid var(--border);
+    border-radius:14px;
+    display:none;
+  }
+  .share-box.visible{display:block;}
+  .share-link{
+    font-size:13px;
+    color:var(--teal);
+    word-break:break-all;
+    margin-bottom:12px;
+  }
+  .whatsapp-btn{
+    display:block;
+    width:100%;
+    text-align:center;
+    padding:14px;
+    background:#25D366;
+    color:#0a1a12;
+    font-weight:700;
+    border-radius:12px;
+    text-decoration:none;
+    font-size:15px;
+  }
+  .status-text{
+    text-align:center;
+    color:var(--text-dim);
+    font-size:13px;
+    margin-top:14px;
+  }
+  .radar{
+    width:220px;
+    height:220px;
+    margin:8px auto 28px;
+    position:relative;
+  }
+  .ring{
+    position:absolute;
+    inset:0;
+    border-radius:50%;
+    border:2px solid var(--border);
+  }
+  .ring.pulse{
+    border-color:var(--accent);
+    animation:pulse 2s ease-out infinite;
+  }
+  @keyframes pulse{
+    0%{transform:scale(0.6);opacity:.9;}
+    100%{transform:scale(1);opacity:0;}
+  }
+  .dest-dot{
+    position:absolute;
+    top:50%;left:50%;
+    width:14px;height:14px;
+    background:var(--teal);
+    border-radius:50%;
+    transform:translate(-50%,-50%);
+    box-shadow:0 0 0 6px rgba(63,167,150,.15);
+  }
+  .traveler-dot{
+    position:absolute;
+    width:16px;height:16px;
+    background:var(--accent);
+    border-radius:50%;
+    box-shadow:0 0 0 6px rgba(242,166,90,.2);
+    transition:top .6s ease, left .6s ease;
+  }
+  .metrics{
+    display:flex;
+    justify-content:space-between;
+    gap:16px;
+    margin-bottom:22px;
+  }
+  .metric{
+    flex:1;
+    background:var(--bg);
+    border:1px solid var(--border);
+    border-radius:14px;
+    padding:18px 12px;
+    text-align:center;
+  }
+  .metric .big{
+    font-size:26px;
+    font-weight:700;
+    color:var(--accent);
+  }
+  .metric .small{
+    font-size:12px;
+    color:var(--text-dim);
+    margin-top:4px;
+  }
+  .route-btn{
+    display:block;
+    width:100%;
+    text-align:center;
+    padding:16px;
+    background:transparent;
+    border:1px solid var(--accent);
+    color:var(--accent);
+    font-weight:700;
+    border-radius:14px;
+    text-decoration:none;
+    font-size:15px;
+    margin-top:6px;
+  }
+  .center-msg{
+    text-align:center;
+    color:var(--text-dim);
+    padding:40px 10px;
+    line-height:1.6;
+  }
+  .permission-btn{
+    width:100%;
+    padding:18px;
+    font-size:16px;
+    font-weight:700;
+    color:#10141F;
+    background:var(--teal);
+    border:none;
+    border-radius:14px;
+    cursor:pointer;
+  }
+</style>
+</head>
+<body>
+
+<div class="brand">yaklaşıyor</div>
+<h1 id="pageTitle">Ne Kadar Kaldı?</h1>
+
+<div class="card" id="app"></div>
+
+<script>
+const API = '';
+
+function haversine(lat1, lon1, lat2, lon2) {
+  const R = 6371000;
+  const toRad = d => d * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1), dLon = toRad(lon2 - lon1);
+  const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function fmtDistance(m) {
+  if (m == null) return '—';
+  if (m < 1000) return Math.round(m) + ' m';
+  return (m/1000).toFixed(1) + ' km';
+}
+function fmtEta(min) {
+  if (min == null) return '—';
+  if (min < 1) return '<1 dk';
+  return Math.round(min) + ' dk';
+}
+
+const params = new URLSearchParams(location.search);
+const code = params.get('kod');
+
+if (code) {
+  renderWaiting(code);
+} else {
+  renderSender();
+}
+
+function renderSender() {
+  const app = document.getElementById('app');
+  app.innerHTML = `
+    <button class="send-btn" id="sendBtn">📍 Canlı Konum Gönder</button>
+
+    <div class="label">Ulaşım şekli</div>
+    <div class="option-row" id="modeRow">
+      <div class="opt selected" data-mode="araba">🚗 Araba</div>
+      <div class="opt" data-mode="yaya">🚶 Yaya</div>
+    </div>
+
+    <div class="label">Süre</div>
+    <div class="option-row" id="durRow">
+      <div class="opt selected" data-dur="15">15 dk</div>
+      <div class="opt" data-dur="60">1 saat</div>
+      <div class="opt" data-dur="600">10 saat</div>
+    </div>
+
+    <div class="share-box" id="shareBox">
+      <div class="share-link" id="shareLink"></div>
+      <a class="whatsapp-btn" id="waBtn" target="_blank">WhatsApp'tan Gönder</a>
+      <div class="status-text" id="sendStatus">Konum paylaşımı aktif — sayfayı kapatma</div>
+    </div>
+  `;
+
+  let mode = 'araba';
+  let dur = '15';
+
+  document.getElementById('modeRow').addEventListener('click', e => {
+    const opt = e.target.closest('.opt'); if (!opt) return;
+    document.querySelectorAll('#modeRow .opt').forEach(o => o.classList.remove('selected'));
+    opt.classList.add('selected');
+    mode = opt.dataset.mode;
+  });
+  document.getElementById('durRow').addEventListener('click', e => {
+    const opt = e.target.closest('.opt'); if (!opt) return;
+    document.querySelectorAll('#durRow .opt').forEach(o => o.classList.remove('selected'));
+    opt.classList.add('selected');
+    dur = opt.dataset.dur;
+  });
+
+  document.getElementById('sendBtn').addEventListener('click', async () => {
+    const btn = document.getElementById('sendBtn');
+    btn.disabled = true;
+    btn.textContent = 'Konum alınıyor...';
+
+    if (!navigator.geolocation) {
+      alert('Tarayıcın konum servisini desteklemiyor.');
+      btn.disabled = false; btn.textContent = '📍 Canlı Konum Gönder';
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(async (pos) => {
+      const res = await fetch('/api/session', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ duration: dur, mode })
+      });
+      const data = await res.json();
+      if (!data.code) { alert('Bir hata oluştu, tekrar dene.'); btn.disabled=false; return; }
+
+      const link = `${location.origin}${location.pathname}?kod=${data.code}`;
+      document.getElementById('shareLink').textContent = link;
+      document.getElementById('waBtn').href = `https://wa.me/?text=${encodeURIComponent('Canlı konumumu takip et: ' + link)}`;
+      document.getElementById('shareBox').classList.add('visible');
+      btn.textContent = '✅ Konum Gönderiliyor';
+
+      startTracking(data.code, dur);
+    }, (err) => {
+      alert('Konum izni verilmedi. Ayarlardan izin vermen gerekiyor.');
+      btn.disabled = false; btn.textContent = '📍 Canlı Konum Gönder';
+    }, { enableHighAccuracy: true });
+  });
+}
+
+function startTracking(code, durationMinKey) {
+  const durationMs = { '15': 15*60*1000, '60': 60*60*1000, '600': 10*60*60*1000 }[durationMinKey];
+  const endAt = Date.now() + durationMs;
+
+  const watchId = navigator.geolocation.watchPosition(async (pos) => {
+    if (Date.now() > endAt) {
+      navigator.geolocation.clearWatch(watchId);
+      document.getElementById('sendStatus').textContent = 'Süre doldu, paylaşım durdu.';
+      return;
+    }
+    try {
+      await fetch(`/api/location/${code}`, {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ lat: pos.coords.latitude, lon: pos.coords.longitude })
+      });
+    } catch(e) {}
+  }, () => {}, { enableHighAccuracy: true, maximumAge: 5000 });
+
+  setTimeout(() => {
+    navigator.geolocation.clearWatch(watchId);
+    const st = document.getElementById('sendStatus');
+    if (st) st.textContent = 'Süre doldu, paylaşım durdu.';
+  }, durationMs);
+}
+
+function renderWaiting(code) {
+  const app = document.getElementById('app');
+  app.innerHTML = `
+    <div class="center-msg" id="permWrap">
+      Bu kişiyi takip etmek için konum izni vermen gerekiyor.<br><br>
+      <button class="permission-btn" id="permBtn">Konumumu Paylaş ve Takip Et</button>
+    </div>
+  `;
+
+  document.getElementById('permBtn').addEventListener('click', () => {
+    if (!navigator.geolocation) { alert('Tarayıcın konumu desteklemiyor.'); return; }
+    navigator.geolocation.getCurrentPosition(async (pos) => {
+      await fetch(`/api/destination/${code}`, {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ lat: pos.coords.latitude, lon: pos.coords.longitude })
+      });
+      setupPush(code);
+      renderTrackingUI(code);
+    }, () => alert('İzin verilmedi.'), { enableHighAccuracy: true });
+  });
+}
+
+function renderTrackingUI(code) {
+  const app = document.getElementById('app');
+  app.innerHTML = `
+    <div class="radar">
+      <div class="ring"></div>
+      <div class="ring pulse" id="pulseRing"></div>
+      <div class="dest-dot"></div>
+      <div class="traveler-dot" id="travelerDot" style="top:15%;left:50%;"></div>
+    </div>
+    <div class="metrics">
+      <div class="metric">
+        <div class="big" id="distVal">—</div>
+        <div class="small">mesafe</div>
+      </div>
+      <div class="metric">
+        <div class="big" id="etaVal">—</div>
+        <div class="small">tahmini süre</div>
+      </div>
+    </div>
+    <a class="route-btn" id="routeBtn" target="_blank">🧭 Yol Tarifi Al</a>
+    <div class="status-text" id="waitStatus">Bağlanılıyor...</div>
+  `;
+
+  async function poll() {
+    try {
+      const res = await fetch(`/api/status/${code}`);
+      if (!res.ok) { document.getElementById('waitStatus').textContent = 'Oturum bulunamadı.'; return; }
+      const d = await res.json();
+
+      document.getElementById('distVal').textContent = fmtDistance(d.distance);
+      document.getElementById('etaVal').textContent = fmtEta(d.etaMinutes);
+
+      if (d.travelerLoc) {
+        document.getElementById('routeBtn').href =
+          `https://www.google.com/maps/dir/?api=1&destination=${d.travelerLoc.lat},${d.travelerLoc.lon}&travelmode=${d.mode === 'yaya' ? 'walking' : 'driving'}`;
+      }
+
+      if (d.distance != null) {
+        const maxDist = 3000;
+        const ratio = Math.min(d.distance / maxDist, 1);
+        const angle = (Date.now()/4000) % (Math.PI*2);
+        const radius = 15 + ratio * 75;
+        const top = 50 + Math.sin(angle)*radius*0.4;
+        const left = 50 + Math.cos(angle)*radius*0.4;
+        const dot = document.getElementById('travelerDot');
+        dot.style.top = top + '%';
+        dot.style.left = left + '%';
+      }
+
+      const statusEl = document.getElementById('waitStatus');
+      if (!d.active) statusEl.textContent = 'Paylaşım süresi doldu.';
+      else if (d.etaMinutes != null && d.etaMinutes <= 1) statusEl.textContent = '🔥 Neredeyse geldi!';
+      else statusEl.textContent = 'Canlı takip ediliyor';
+    } catch(e) {}
+  }
+
+  poll();
+  setInterval(poll, 4000);
+}
+
+async function setupPush(code) {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+  try {
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') return;
+
+    const reg = await navigator.serviceWorker.register('/sw.js');
+    const keyRes = await fetch('/api/vapid-public-key');
+    const { key } = await keyRes.json();
+    if (!key) return;
+
+    const sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(key)
+    });
+
+    await fetch(`/api/subscribe/${code}`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ subscription: sub })
+    });
+  } catch(e) { console.error('Push kurulumu başarısız:', e); }
+}
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = atob(base64);
+  return Uint8Array.from([...rawData].map(c => c.charCodeAt(0)));
+}
+</script>
+</body>
+</html>

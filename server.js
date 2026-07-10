@@ -23,7 +23,8 @@ function generateCode() {
   return code;
 }
 
-function distanceMeters(lat1, lon1, lat2, lon2) {
+// Haversine formülü: iki koordinat arası KUŞ UÇUŞU mesafe (metre) - sadece API başarısız olursa yedek
+function straightLineDistance(lat1, lon1, lat2, lon2) {
   const R = 6371000;
   const toRad = (d) => (d * Math.PI) / 180;
   const dLat = toRad(lat2 - lat1);
@@ -39,6 +40,58 @@ const SPEEDS = {
   araba: 30 * 1000 / 3600,
   yaya: 5 * 1000 / 3600,
 };
+
+// ---- OSRM (OpenStreetMap) üzerinden GERÇEK yol mesafesi/süresi ----
+async function fetchRealRoute(mode, lat1, lon1, lat2, lon2) {
+  const profilePath = mode === 'yaya' ? 'routed-foot/route/v1/foot' : 'routed-car/route/v1/driving';
+  const url = `https://routing.openstreetmap.de/${profilePath}/${lon1},${lat1};${lon2},${lat2}?overview=false`;
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    const res = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeout);
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data.code !== 'Ok' || !data.routes || !data.routes[0]) return null;
+    return {
+      distanceMeters: data.routes[0].distance,
+      durationSeconds: data.routes[0].duration,
+    };
+  } catch (err) {
+    console.error('OSRM rota hatası:', err.message);
+    return null;
+  }
+}
+
+async function refreshRoute(session) {
+  if (!session.travelerLoc || !session.destLoc) return;
+
+  const now = Date.now();
+  if (session.routeUpdatedAt && now - session.routeUpdatedAt < 8000) return;
+
+  const route = await fetchRealRoute(
+    session.mode,
+    session.travelerLoc.lat, session.travelerLoc.lon,
+    session.destLoc.lat, session.destLoc.lon
+  );
+
+  if (route) {
+    session.routeDistance = route.distanceMeters;
+    session.routeEtaMinutes = route.durationSeconds / 60;
+    session.routeUpdatedAt = now;
+    session.routeSource = 'osrm';
+  } else {
+    const straight = straightLineDistance(
+      session.travelerLoc.lat, session.travelerLoc.lon,
+      session.destLoc.lat, session.destLoc.lon
+    );
+    session.routeDistance = straight * 1.3;
+    session.routeEtaMinutes = (session.routeDistance / SPEEDS[session.mode]) / 60;
+    session.routeUpdatedAt = now;
+    session.routeSource = 'fallback';
+  }
+}
 
 const DURATIONS = {
   '15': 15 * 60 * 1000,
@@ -64,7 +117,7 @@ app.post('/api/session', (req, res) => {
   res.json({ code });
 });
 
-app.post('/api/location/:code', (req, res) => {
+app.post('/api/location/:code', async (req, res) => {
   const session = sessions[req.params.code];
   if (!session) return res.status(404).json({ error: 'Oturum bulunamadı' });
   if (Date.now() > session.expiresAt) return res.status(410).json({ error: 'Süre doldu' });
@@ -72,16 +125,18 @@ app.post('/api/location/:code', (req, res) => {
   const { lat, lon } = req.body;
   session.travelerLoc = { lat, lon, updatedAt: Date.now() };
 
-  maybeNotify(session);
+  await refreshRoute(session);
+  await maybeNotify(session);
 
   res.json({ ok: true });
 });
 
-app.post('/api/destination/:code', (req, res) => {
+app.post('/api/destination/:code', async (req, res) => {
   const session = sessions[req.params.code];
   if (!session) return res.status(404).json({ error: 'Oturum bulunamadı' });
   const { lat, lon } = req.body;
   session.destLoc = { lat, lon };
+  await refreshRoute(session);
   res.json({ ok: true });
 });
 
@@ -97,22 +152,12 @@ app.get('/api/status/:code', (req, res) => {
   if (!session) return res.status(404).json({ error: 'Oturum bulunamadı' });
 
   const active = Date.now() <= session.expiresAt;
-  let distance = null;
-  let etaMinutes = null;
-
-  if (session.travelerLoc && session.destLoc) {
-    distance = distanceMeters(
-      session.travelerLoc.lat, session.travelerLoc.lon,
-      session.destLoc.lat, session.destLoc.lon
-    );
-    const speed = SPEEDS[session.mode];
-    etaMinutes = distance / speed / 60;
-  }
 
   res.json({
     active,
-    distance,
-    etaMinutes,
+    distance: session.routeDistance ?? null,
+    etaMinutes: session.routeEtaMinutes ?? null,
+    routeSource: session.routeSource ?? null,
     travelerLoc: session.travelerLoc,
     mode: session.mode,
     expiresAt: session.expiresAt,
@@ -123,16 +168,12 @@ app.get('/api/vapid-public-key', (req, res) => {
   res.json({ key: VAPID_PUBLIC_KEY || null });
 });
 
-function maybeNotify(session) {
+async function maybeNotify(session) {
   if (session.notified) return;
   if (!session.travelerLoc || !session.destLoc || !session.subscription) return;
+  if (session.routeEtaMinutes == null) return;
 
-  const distance = distanceMeters(
-    session.travelerLoc.lat, session.travelerLoc.lon,
-    session.destLoc.lat, session.destLoc.lon
-  );
-  const speed = SPEEDS[session.mode];
-  const etaMinutes = distance / speed / 60;
+  const etaMinutes = session.routeEtaMinutes;
 
   if (etaMinutes <= 1) {
     session.notified = true;

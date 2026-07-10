@@ -2,242 +2,303 @@
 <html lang="tr">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#0B0E17">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
 <title>Ne Kadar Kaldı?</title>
 <link rel="manifest" href="/manifest.json">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <style>
   :root{
-    --bg:#10141F;
-    --bg-elevated:#171D2C;
-    --text:#EDEEF3;
+    --bg-deep:#0B0E17;
+    --bg-glass:rgba(23,29,44,.55);
+    --bg-glass-solid:#171D2C;
+    --text:#F3F4F8;
     --text-dim:#8B92A8;
     --accent:#F2A65A;
-    --accent-dim:#3A2E22;
-    --teal:#3FA796;
-    --border:#252C3E;
-    --radius:18px;
+    --accent-2:#3FA796;
+    --border:rgba(255,255,255,.08);
+    --border-strong:rgba(242,166,90,.4);
   }
-  *{box-sizing:border-box;}
-  body{
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{
     margin:0;
     min-height:100vh;
-    background:var(--bg);
+    background:var(--bg-deep);
     color:var(--text);
-    font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
+    font-family:'Inter',system-ui,-apple-system,sans-serif;
+    overscroll-behavior:none;
+  }
+  body{
+    position:relative;
     display:flex;
     flex-direction:column;
     align-items:center;
-    padding:32px 20px 60px;
+    padding:calc(28px + env(safe-area-inset-top)) 18px calc(50px + env(safe-area-inset-bottom));
+    overflow-x:hidden;
+    animation:fadeIn .5s ease;
   }
+  @keyframes fadeIn{from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:translateY(0);}}
+
+  body::before{
+    content:'';
+    position:fixed; inset:0;
+    background:
+      radial-gradient(ellipse 600px 400px at 50% -10%, rgba(242,166,90,.16), transparent 60%),
+      radial-gradient(ellipse 500px 500px at 90% 90%, rgba(63,167,150,.12), transparent 60%),
+      var(--bg-deep);
+    z-index:-2;
+  }
+  body::after{
+    content:'';
+    position:fixed; inset:0;
+    background-image: radial-gradient(rgba(255,255,255,.05) 1px, transparent 1px);
+    background-size:26px 26px;
+    z-index:-1;
+    mask-image: radial-gradient(ellipse 700px 500px at 50% 30%, black, transparent 75%);
+  }
+
   .brand{
-    font-size:15px;
-    letter-spacing:2px;
+    font-family:'Space Grotesk',sans-serif;
+    font-size:12px;
+    font-weight:700;
+    letter-spacing:3px;
     text-transform:uppercase;
-    color:var(--text-dim);
-    margin-bottom:6px;
+    color:var(--accent);
+    margin-bottom:8px;
+    display:flex; align-items:center; gap:8px;
   }
+  .brand .dot{width:6px;height:6px;border-radius:50%;background:var(--accent);}
   h1{
-    font-size:28px;
-    margin:0 0 36px;
+    font-family:'Space Grotesk',sans-serif;
+    font-size:27px;
+    margin:0 0 32px;
     font-weight:700;
     text-align:center;
+    letter-spacing:-.3px;
   }
+
   .card{
     width:100%;
     max-width:420px;
-    background:var(--bg-elevated);
+    background:var(--bg-glass);
+    backdrop-filter:blur(24px) saturate(140%);
+    -webkit-backdrop-filter:blur(24px) saturate(140%);
     border:1px solid var(--border);
-    border-radius:var(--radius);
-    padding:28px 24px;
+    border-radius:26px;
+    padding:32px 22px;
+    box-shadow:0 20px 60px -20px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.04);
   }
-  .send-btn{
-    width:100%;
-    padding:22px;
-    font-size:19px;
-    font-weight:700;
-    color:#10141F;
-    background:var(--accent);
-    border:none;
-    border-radius:16px;
-    cursor:pointer;
-    margin-bottom:24px;
-    transition:transform .15s ease, opacity .15s ease;
-  }
-  .send-btn:active{transform:scale(0.98);}
-  .send-btn:disabled{opacity:.5;cursor:default;}
-  .label{
-    font-size:13px;
+
+  .chip-label{
+    font-size:11px;
+    font-weight:600;
     color:var(--text-dim);
-    margin:20px 0 10px;
-    letter-spacing:.5px;
+    letter-spacing:1.2px;
+    text-transform:uppercase;
+    margin:0 0 10px 2px;
   }
-  .option-row{
+  .chip-row{
     display:flex;
-    gap:10px;
+    gap:8px;
+    margin-bottom:22px;
   }
-  .opt{
+  .chip{
     flex:1;
-    padding:14px 6px;
+    padding:11px 6px;
     text-align:center;
     border:1px solid var(--border);
-    border-radius:12px;
+    border-radius:30px;
     cursor:pointer;
-    font-size:14px;
-    color:var(--text-dim);
-    background:transparent;
-    transition:all .15s ease;
-  }
-  .opt.selected{
-    border-color:var(--accent);
-    color:var(--accent);
-    background:var(--accent-dim);
-    font-weight:600;
-  }
-  .share-box{
-    margin-top:24px;
-    padding:18px;
-    background:var(--bg);
-    border:1px solid var(--border);
-    border-radius:14px;
-    display:none;
-  }
-  .share-box.visible{display:block;}
-  .share-link{
     font-size:13px;
-    color:var(--teal);
-    word-break:break-all;
+    font-weight:600;
+    color:var(--text-dim);
+    background:rgba(255,255,255,.02);
+    transition:all .18s ease;
+  }
+  .chip.selected{
+    border-color:var(--border-strong);
+    color:var(--accent);
+    background:rgba(242,166,90,.1);
+    box-shadow:0 0 0 1px rgba(242,166,90,.15);
+  }
+
+  .pulse-wrap{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    margin:14px 0 6px;
+  }
+  .pulse-btn{
+    position:relative;
+    width:148px;
+    height:148px;
+    border-radius:50%;
+    border:none;
+    cursor:pointer;
+    background:radial-gradient(circle at 35% 30%, #FFC98A, var(--accent) 60%, #D9873C 100%);
+    box-shadow:0 12px 32px -8px rgba(242,166,90,.55), inset 0 2px 4px rgba(255,255,255,.35);
+    display:flex; align-items:center; justify-content:center;
+    transition:transform .15s ease;
+  }
+  .pulse-btn:active{transform:scale(.96);}
+  .pulse-btn:disabled{opacity:.6; cursor:default;}
+  .pulse-btn .icon{font-size:44px; filter:drop-shadow(0 2px 4px rgba(0,0,0,.25));}
+  .pulse-ring{
+    position:absolute; inset:0;
+    border-radius:50%;
+    border:2px solid rgba(242,166,90,.55);
+    animation:ringPulse 2.4s cubic-bezier(.2,.6,.4,1) infinite;
+  }
+  .pulse-ring.d2{animation-delay:.8s;}
+  .pulse-ring.d3{animation-delay:1.6s;}
+  @keyframes ringPulse{
+    0%{transform:scale(1); opacity:.7;}
+    100%{transform:scale(1.7); opacity:0;}
+  }
+  .btn-caption{
+    margin-top:18px;
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:700;
+    font-size:16px;
+    letter-spacing:.2px;
+  }
+  .btn-sub{
+    margin-top:4px;
+    font-size:12.5px;
+    color:var(--text-dim);
+  }
+
+  .share-box{
+    margin-top:26px;
+    padding:20px;
+    background:rgba(0,0,0,.2);
+    border:1px solid var(--border);
+    border-radius:18px;
+  }
+  .live-badge{
+    display:inline-flex; align-items:center; gap:6px;
+    font-size:11px; font-weight:700; letter-spacing:1px;
+    color:var(--accent-2);
+    text-transform:uppercase;
     margin-bottom:12px;
   }
+  .live-badge .dot{
+    width:7px;height:7px;border-radius:50%;
+    background:var(--accent-2);
+    animation:blink 1.4s ease-in-out infinite;
+  }
+  @keyframes blink{0%,100%{opacity:1;} 50%{opacity:.3;}}
+  .share-link{
+    font-size:12.5px;
+    color:var(--text-dim);
+    word-break:break-all;
+    margin-bottom:14px;
+    font-family:monospace;
+  }
   .whatsapp-btn{
-    display:block;
+    display:flex; align-items:center; justify-content:center; gap:8px;
     width:100%;
-    text-align:center;
-    padding:14px;
-    background:#25D366;
-    color:#0a1a12;
+    padding:15px;
+    background:linear-gradient(135deg,#2FE07A,#1FAE60);
+    color:#06210F;
     font-weight:700;
-    border-radius:12px;
+    border-radius:14px;
     text-decoration:none;
     font-size:15px;
+    box-shadow:0 8px 20px -6px rgba(47,224,122,.4);
   }
   .status-text{
     text-align:center;
     color:var(--text-dim);
-    font-size:13px;
-    margin-top:14px;
+    font-size:12.5px;
+    margin-top:16px;
   }
-  .radar{
-    width:220px;
-    height:220px;
-    margin:8px auto 28px;
+
+  .map-wrap{
+    width:100%;
+    height:280px;
+    border-radius:18px;
+    overflow:hidden;
+    margin-bottom:22px;
+    border:1px solid var(--border);
     position:relative;
+    filter: invert(0.93) hue-rotate(180deg) brightness(1.05) contrast(0.92);
   }
-  .ring{
-    position:absolute;
-    inset:0;
-    border-radius:50%;
-    border:2px solid var(--border);
-  }
-  .ring.pulse{
-    border-color:var(--accent);
-    animation:pulse 2s ease-out infinite;
-  }
-  @keyframes pulse{
-    0%{transform:scale(0.6);opacity:.9;}
-    100%{transform:scale(1);opacity:0;}
-  }
-  .dest-dot{
-    position:absolute;
-    top:50%;left:50%;
-    width:14px;height:14px;
-    background:var(--teal);
-    border-radius:50%;
-    transform:translate(-50%,-50%);
-    box-shadow:0 0 0 6px rgba(63,167,150,.15);
-  }
-  .traveler-dot{
-    position:absolute;
-    width:16px;height:16px;
-    background:var(--accent);
-    border-radius:50%;
-    box-shadow:0 0 0 6px rgba(242,166,90,.2);
-    transition:top .6s ease, left .6s ease;
-  }
+  #map{width:100%; height:100%;}
   .metrics{
     display:flex;
-    justify-content:space-between;
-    gap:16px;
-    margin-bottom:22px;
+    gap:12px;
+    margin-bottom:20px;
   }
   .metric{
     flex:1;
-    background:var(--bg);
+    background:rgba(0,0,0,.2);
     border:1px solid var(--border);
-    border-radius:14px;
-    padding:18px 12px;
+    border-radius:16px;
+    padding:18px 10px;
     text-align:center;
   }
   .metric .big{
-    font-size:26px;
+    font-family:'Space Grotesk',sans-serif;
+    font-size:25px;
     font-weight:700;
     color:var(--accent);
   }
   .metric .small{
-    font-size:12px;
+    font-size:11px;
     color:var(--text-dim);
-    margin-top:4px;
+    margin-top:5px;
+    text-transform:uppercase;
+    letter-spacing:.5px;
   }
   .route-btn{
-    display:block;
+    display:flex; align-items:center; justify-content:center; gap:8px;
     width:100%;
-    text-align:center;
     padding:16px;
-    background:transparent;
-    border:1px solid var(--accent);
+    background:rgba(242,166,90,.1);
+    border:1px solid var(--border-strong);
     color:var(--accent);
     font-weight:700;
-    border-radius:14px;
+    border-radius:16px;
     text-decoration:none;
-    font-size:15px;
-    margin-top:6px;
+    font-size:14.5px;
   }
   .center-msg{
     text-align:center;
     color:var(--text-dim);
-    padding:40px 10px;
-    line-height:1.6;
+    padding:30px 6px 10px;
+    line-height:1.7;
+    font-size:14.5px;
   }
   .permission-btn{
     width:100%;
     padding:18px;
-    font-size:16px;
+    font-size:15.5px;
     font-weight:700;
-    color:#10141F;
-    background:var(--teal);
+    color:#06231F;
+    background:linear-gradient(135deg,#5FD9C6,var(--accent-2));
     border:none;
-    border-radius:14px;
+    border-radius:16px;
     cursor:pointer;
+    margin-top:18px;
+    box-shadow:0 10px 24px -8px rgba(63,167,150,.4);
   }
 </style>
 </head>
 <body>
 
-<div class="brand">yaklaşıyor</div>
+<div class="brand"><span class="dot"></span>Canlı Takip</div>
 <h1 id="pageTitle">Ne Kadar Kaldı?</h1>
 
 <div class="card" id="app"></div>
 
 <script>
-const API = '';
-
-function haversine(lat1, lon1, lat2, lon2) {
-  const R = 6371000;
-  const toRad = d => d * Math.PI / 180;
-  const dLat = toRad(lat2 - lat1), dLon = toRad(lon2 - lon1);
-  const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-}
-
 function fmtDistance(m) {
   if (m == null) return '—';
   if (m < 1000) return Math.round(m) + ' m';
@@ -261,22 +322,32 @@ if (code) {
 function renderSender() {
   const app = document.getElementById('app');
   app.innerHTML = `
-    <button class="send-btn" id="sendBtn">📍 Canlı Konum Gönder</button>
-
-    <div class="label">Ulaşım şekli</div>
-    <div class="option-row" id="modeRow">
-      <div class="opt selected" data-mode="araba">🚗 Araba</div>
-      <div class="opt" data-mode="yaya">🚶 Yaya</div>
+    <div class="chip-label">Ulaşım şekli</div>
+    <div class="chip-row" id="modeRow">
+      <div class="chip selected" data-mode="araba">🚗 Araba</div>
+      <div class="chip" data-mode="yaya">🚶 Yaya</div>
     </div>
 
-    <div class="label">Süre</div>
-    <div class="option-row" id="durRow">
-      <div class="opt selected" data-dur="15">15 dk</div>
-      <div class="opt" data-dur="60">1 saat</div>
-      <div class="opt" data-dur="600">10 saat</div>
+    <div class="chip-label">Süre</div>
+    <div class="chip-row" id="durRow">
+      <div class="chip selected" data-dur="15">15 dk</div>
+      <div class="chip" data-dur="60">1 saat</div>
+      <div class="chip" data-dur="600">10 saat</div>
     </div>
 
-    <div class="share-box" id="shareBox">
+    <div class="pulse-wrap">
+      <button class="pulse-btn" id="sendBtn">
+        <span class="pulse-ring"></span>
+        <span class="pulse-ring d2"></span>
+        <span class="pulse-ring d3"></span>
+        <span class="icon">📍</span>
+      </button>
+      <div class="btn-caption">Canlı Konum Gönder</div>
+      <div class="btn-sub">Dokun ve paylaşımı başlat</div>
+    </div>
+
+    <div class="share-box" id="shareBox" style="display:none;">
+      <div class="live-badge"><span class="dot"></span>Yayında</div>
       <div class="share-link" id="shareLink"></div>
       <a class="whatsapp-btn" id="waBtn" target="_blank">WhatsApp'tan Gönder</a>
       <div class="status-text" id="sendStatus">Konum paylaşımı aktif — sayfayı kapatma</div>
@@ -287,14 +358,14 @@ function renderSender() {
   let dur = '15';
 
   document.getElementById('modeRow').addEventListener('click', e => {
-    const opt = e.target.closest('.opt'); if (!opt) return;
-    document.querySelectorAll('#modeRow .opt').forEach(o => o.classList.remove('selected'));
+    const opt = e.target.closest('.chip'); if (!opt) return;
+    document.querySelectorAll('#modeRow .chip').forEach(o => o.classList.remove('selected'));
     opt.classList.add('selected');
     mode = opt.dataset.mode;
   });
   document.getElementById('durRow').addEventListener('click', e => {
-    const opt = e.target.closest('.opt'); if (!opt) return;
-    document.querySelectorAll('#durRow .opt').forEach(o => o.classList.remove('selected'));
+    const opt = e.target.closest('.chip'); if (!opt) return;
+    document.querySelectorAll('#durRow .chip').forEach(o => o.classList.remove('selected'));
     opt.classList.add('selected');
     dur = opt.dataset.dur;
   });
@@ -302,11 +373,10 @@ function renderSender() {
   document.getElementById('sendBtn').addEventListener('click', async () => {
     const btn = document.getElementById('sendBtn');
     btn.disabled = true;
-    btn.textContent = 'Konum alınıyor...';
 
     if (!navigator.geolocation) {
       alert('Tarayıcın konum servisini desteklemiyor.');
-      btn.disabled = false; btn.textContent = '📍 Canlı Konum Gönder';
+      btn.disabled = false;
       return;
     }
 
@@ -322,13 +392,12 @@ function renderSender() {
       const link = `${location.origin}${location.pathname}?kod=${data.code}`;
       document.getElementById('shareLink').textContent = link;
       document.getElementById('waBtn').href = `https://wa.me/?text=${encodeURIComponent('Canlı konumumu takip et: ' + link)}`;
-      document.getElementById('shareBox').classList.add('visible');
-      btn.textContent = '✅ Konum Gönderiliyor';
+      document.getElementById('shareBox').style.display = 'block';
 
       startTracking(data.code, dur);
-    }, (err) => {
+    }, () => {
       alert('Konum izni verilmedi. Ayarlardan izin vermen gerekiyor.');
-      btn.disabled = false; btn.textContent = '📍 Canlı Konum Gönder';
+      btn.disabled = false;
     }, { enableHighAccuracy: true });
   });
 }
@@ -340,7 +409,8 @@ function startTracking(code, durationMinKey) {
   const watchId = navigator.geolocation.watchPosition(async (pos) => {
     if (Date.now() > endAt) {
       navigator.geolocation.clearWatch(watchId);
-      document.getElementById('sendStatus').textContent = 'Süre doldu, paylaşım durdu.';
+      const st = document.getElementById('sendStatus');
+      if (st) st.textContent = 'Süre doldu, paylaşım durdu.';
       return;
     }
     try {
@@ -362,10 +432,10 @@ function startTracking(code, durationMinKey) {
 function renderWaiting(code) {
   const app = document.getElementById('app');
   app.innerHTML = `
-    <div class="center-msg" id="permWrap">
-      Bu kişiyi takip etmek için konum izni vermen gerekiyor.<br><br>
-      <button class="permission-btn" id="permBtn">Konumumu Paylaş ve Takip Et</button>
+    <div class="center-msg">
+      Bu kişiyi takip etmek için konum izni vermen gerekiyor.
     </div>
+    <button class="permission-btn" id="permBtn">Konumumu Paylaş ve Takip Et</button>
   `;
 
   document.getElementById('permBtn').addEventListener('click', () => {
@@ -377,20 +447,15 @@ function renderWaiting(code) {
         body: JSON.stringify({ lat: pos.coords.latitude, lon: pos.coords.longitude })
       });
       setupPush(code);
-      renderTrackingUI(code);
+      renderTrackingUI(code, pos.coords.latitude, pos.coords.longitude);
     }, () => alert('İzin verilmedi.'), { enableHighAccuracy: true });
   });
 }
 
-function renderTrackingUI(code) {
+function renderTrackingUI(code, destLat, destLon) {
   const app = document.getElementById('app');
   app.innerHTML = `
-    <div class="radar">
-      <div class="ring"></div>
-      <div class="ring pulse" id="pulseRing"></div>
-      <div class="dest-dot"></div>
-      <div class="traveler-dot" id="travelerDot" style="top:15%;left:50%;"></div>
-    </div>
+    <div class="map-wrap"><div id="map"></div></div>
     <div class="metrics">
       <div class="metric">
         <div class="big" id="distVal">—</div>
@@ -405,6 +470,17 @@ function renderTrackingUI(code) {
     <div class="status-text" id="waitStatus">Bağlanılıyor...</div>
   `;
 
+  const map = L.map('map', { zoomControl:false, attributionControl:false }).setView([destLat, destLon], 14);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+
+  const destIcon = L.divIcon({ className:'', html:'<div style="width:16px;height:16px;border-radius:50%;background:#3FA796;box-shadow:0 0 0 6px rgba(63,167,150,.25);"></div>', iconSize:[16,16] });
+  const travelerIcon = L.divIcon({ className:'', html:'<div style="width:18px;height:18px;border-radius:50%;background:#F2A65A;box-shadow:0 0 0 7px rgba(242,166,90,.3);"></div>', iconSize:[18,18] });
+
+  L.marker([destLat, destLon], { icon: destIcon }).addTo(map);
+  let travelerMarker = null;
+  let trail = [];
+  let trailLine = L.polyline([], { color:'#F2A65A', weight:3, opacity:.6 }).addTo(map);
+
   async function poll() {
     try {
       const res = await fetch(`/api/status/${code}`);
@@ -415,20 +491,25 @@ function renderTrackingUI(code) {
       document.getElementById('etaVal').textContent = fmtEta(d.etaMinutes);
 
       if (d.travelerLoc) {
+        const pos = [d.travelerLoc.lat, d.travelerLoc.lon];
+
+        if (!travelerMarker) {
+          travelerMarker = L.marker(pos, { icon: travelerIcon }).addTo(map);
+        } else {
+          travelerMarker.setLatLng(pos);
+        }
+
+        const last = trail[trail.length - 1];
+        if (!last || last[0] !== pos[0] || last[1] !== pos[1]) {
+          trail.push(pos);
+          trailLine.setLatLngs(trail);
+        }
+
+        const bounds = L.latLngBounds([[destLat, destLon], pos]);
+        map.fitBounds(bounds, { padding: [40, 40], maxZoom: 16 });
+
         document.getElementById('routeBtn').href =
           `https://www.google.com/maps/dir/?api=1&destination=${d.travelerLoc.lat},${d.travelerLoc.lon}&travelmode=${d.mode === 'yaya' ? 'walking' : 'driving'}`;
-      }
-
-      if (d.distance != null) {
-        const maxDist = 3000;
-        const ratio = Math.min(d.distance / maxDist, 1);
-        const angle = (Date.now()/4000) % (Math.PI*2);
-        const radius = 15 + ratio * 75;
-        const top = 50 + Math.sin(angle)*radius*0.4;
-        const left = 50 + Math.cos(angle)*radius*0.4;
-        const dot = document.getElementById('travelerDot');
-        dot.style.top = top + '%';
-        dot.style.left = left + '%';
       }
 
       const statusEl = document.getElementById('waitStatus');

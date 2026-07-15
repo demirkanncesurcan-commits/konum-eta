@@ -9,7 +9,6 @@ const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// ---- Firebase Admin SDK (native uygulamaya push bildirimi göndermek için) ----
 let firebaseReady = false;
 let messaging = null;
 try {
@@ -34,7 +33,6 @@ try {
   console.error('Firebase Admin başlatma hatası:', err.message);
 }
 
-// ---- VAPID (push bildirimi için kimlik anahtarları) ----
 const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY;
 const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY;
 
@@ -42,8 +40,16 @@ if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
   webpush.setVapidDetails('mailto:test@example.com', VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
 }
 
-// ---- Bellek içi oturum deposu (sadece 2 kişilik kullanım için yeterli) ----
 const sessions = {};
+const users = {};
+
+function normalizePhone(raw) {
+  if (!raw) return '';
+  let digits = raw.replace(/[^0-9]/g, '');
+  if (digits.startsWith('90') && digits.length === 12) digits = digits.slice(2);
+  if (digits.startsWith('0') && digits.length === 11) digits = digits.slice(1);
+  return digits;
+}
 
 function generateCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -52,7 +58,6 @@ function generateCode() {
   return code;
 }
 
-// Haversine formülü: iki koordinat arası KUŞ UÇUŞU mesafe (metre) - sadece API başarısız olursa yedek
 function straightLineDistance(lat1, lon1, lat2, lon2) {
   const R = 6371000;
   const toRad = (d) => (d * Math.PI) / 180;
@@ -70,7 +75,6 @@ const SPEEDS = {
   yaya: 5 * 1000 / 3600,
 };
 
-// ---- OSRM (OpenStreetMap) üzerinden GERÇEK yol mesafesi/süresi ----
 async function fetchRealRoute(mode, lat1, lon1, lat2, lon2) {
   const profilePath = mode === 'yaya' ? 'routed-foot/route/v1/foot' : 'routed-car/route/v1/driving';
   const url = `https://routing.openstreetmap.de/${profilePath}/${lon1},${lat1};${lon2},${lat2}?overview=false`;
@@ -128,25 +132,97 @@ const DURATIONS = {
   '600': 10 * 60 * 60 * 1000,
 };
 
-app.post('/api/session', (req, res) => {
-  const { duration, mode, destLat, destLon, thresholdMin } = req.body;
-  if (!DURATIONS[duration] || !SPEEDS[mode]) {
-    return res.status(400).json({ error: 'Geçersiz süre veya mod' });
+app.post('/api/register', (req, res) => {
+  const { phone, name, fcmToken } = req.body;
+  const normalized = normalizePhone(phone);
+  if (!normalized || !name) {
+    return res.status(400).json({ error: 'Geçersiz isim veya telefon' });
   }
-  const code = generateCode();
-  sessions[code] = {
+  users[normalized] = { name, fcmToken: fcmToken || null };
+  res.json({ ok: true });
+});
+
+app.post('/api/update-token', (req, res) => {
+  const { phone, fcmToken } = req.body;
+  const normalized = normalizePhone(phone);
+  if (!normalized || !users[normalized]) return res.status(404).json({ error: 'Kullanıcı bulunamadı' });
+  users[normalized].fcmToken = fcmToken;
+  res.json({ ok: true });
+});
+
+app.post('/api/match-contacts', (req, res) => {
+  const { phones } = req.body;
+  if (!Array.isArray(phones)) return res.status(400).json({ error: 'phones bir liste olmalı' });
+
+  const matches = [];
+  for (const p of phones) {
+    const normalized = normalizePhone(p);
+    if (users[normalized]) {
+      matches.push({ phone: normalized, name: users[normalized].name });
+    }
+  }
+  res.json({ matches });
+});
+
+app.post('/api/invite', async (req, res) => {
+  const { fromName, fromPhone, toPhone, mode, thresholdMin } = req.body;
+  const normalizedTo = normalizePhone(toPhone);
+  const target = users[normalizedTo];
+
+  if (!target) return res.status(404).json({ error: 'Kişi kayıtlı değil' });
+  if (!DURATIONS['600'] || !SPEEDS[mode]) return res.status(400).json({ error: 'Geçersiz mod' });
+
+  const inviteId = generateCode();
+  sessions[inviteId] = {
     travelerLoc: null,
-    destLoc: destLat && destLon ? { lat: destLat, lon: destLon } : null,
+    destLoc: null,
     mode,
     note: '',
     createdAt: Date.now(),
-    expiresAt: Date.now() + DURATIONS[duration],
+    expiresAt: Date.now() + DURATIONS['600'],
     subscription: null,
     fcmToken: null,
     notifyThresholdMin: (thresholdMin && thresholdMin >= 1 && thresholdMin <= 10) ? thresholdMin : 1,
     notified: false,
+    accepted: false,
+    fromName: fromName || 'Biri',
   };
-  res.json({ code });
+
+  if (firebaseReady && messaging && target.fcmToken) {
+    try {
+      await messaging.send({
+        token: target.fcmToken,
+        notification: {
+          title: 'Canlı Konum Daveti',
+          body: `${fromName || 'Biri'} sizinle canlı konumunu paylaşmak istiyor`,
+        },
+        data: {
+          type: 'invite',
+          inviteId,
+          fromName: fromName || 'Biri',
+        },
+        android: { priority: 'high' },
+      });
+    } catch (err) {
+      console.error('Davet push hatası:', err.message);
+      return res.status(500).json({ error: 'Bildirim gönderilemedi' });
+    }
+  } else {
+    return res.status(500).json({ error: 'Bildirim sistemi hazır değil' });
+  }
+
+  res.json({ inviteId });
+});
+
+app.post('/api/invite/:id/accept', async (req, res) => {
+  const session = sessions[req.params.id];
+  if (!session) return res.status(404).json({ error: 'Davet bulunamadı' });
+  const { lat, lon, fcmToken } = req.body;
+  session.destLoc = { lat, lon };
+  session.fcmToken = fcmToken;
+  session.accepted = true;
+  await refreshRoute(session);
+  res.json({ ok: true });
 });
 
 app.post('/api/location/:code', async (req, res) => {

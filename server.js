@@ -354,6 +354,7 @@ app.get('/api/status/:code', (req, res) => {
     etaMinutes: session.routeEtaMinutes ?? null,
     routeSource: session.routeSource ?? null,
     travelerLoc: session.travelerLoc,
+    destLoc: session.destLoc,
     note: session.note || '',
     mode: session.mode,
     arrived: session.arrived || false,

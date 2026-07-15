@@ -2,7 +2,8 @@ const express = require('express');
 const path = require('path');
 const fs = require('fs');
 const webpush = require('web-push');
-const admin = require('firebase-admin');
+const { initializeApp, cert } = require('firebase-admin/app');
+const { getMessaging } = require('firebase-admin/messaging');
 
 const app = express();
 app.use(express.json());
@@ -10,6 +11,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // ---- Firebase Admin SDK (native uygulamaya push bildirimi göndermek için) ----
 let firebaseReady = false;
+let messaging = null;
 try {
   const secretFilePath = '/etc/secrets/firebase-service-account.json';
   let serviceAccount = null;
@@ -21,7 +23,8 @@ try {
   }
 
   if (serviceAccount) {
-    admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
+    initializeApp({ credential: cert(serviceAccount) });
+    messaging = getMessaging();
     firebaseReady = true;
     console.log('Firebase Admin başlatıldı.');
   } else {
@@ -29,6 +32,24 @@ try {
   }
 } catch (err) {
   console.error('Firebase Admin başlatma hatası:', err.message);
+}
+
+// ---- VAPID (push bildirimi için kimlik anahtarları) ----
+const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY;
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY;
+
+if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
+  webpush.setVapidDetails('mailto:test@example.com', VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+}
+
+// ---- Bellek içi oturum deposu (sadece 2 kişilik kullanım için yeterli) ----
+const sessions = {};
+
+function generateCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = '';
+  for (let i = 0; i < 5; i++) code += chars[Math.floor(Math.random() * chars.length)];
+  return code;
 }
 
 // Haversine formülü: iki koordinat arası KUŞ UÇUŞU mesafe (metre) - sadece API başarısız olursa yedek
@@ -108,7 +129,7 @@ const DURATIONS = {
 };
 
 app.post('/api/session', (req, res) => {
-  const { duration, mode, destLat, destLon } = req.body;
+  const { duration, mode, destLat, destLon, thresholdMin } = req.body;
   if (!DURATIONS[duration] || !SPEEDS[mode]) {
     return res.status(400).json({ error: 'Geçersiz süre veya mod' });
   }
@@ -117,9 +138,12 @@ app.post('/api/session', (req, res) => {
     travelerLoc: null,
     destLoc: destLat && destLon ? { lat: destLat, lon: destLon } : null,
     mode,
+    note: '',
     createdAt: Date.now(),
     expiresAt: Date.now() + DURATIONS[duration],
     subscription: null,
+    fcmToken: null,
+    notifyThresholdMin: (thresholdMin && thresholdMin >= 1 && thresholdMin <= 10) ? thresholdMin : 1,
     notified: false,
   };
   res.json({ code });
@@ -130,8 +154,9 @@ app.post('/api/location/:code', async (req, res) => {
   if (!session) return res.status(404).json({ error: 'Oturum bulunamadı' });
   if (Date.now() > session.expiresAt) return res.status(410).json({ error: 'Süre doldu' });
 
-  const { lat, lon } = req.body;
+  const { lat, lon, note } = req.body;
   session.travelerLoc = { lat, lon, updatedAt: Date.now() };
+  if (typeof note === 'string') session.note = note.slice(0, 100);
 
   await refreshRoute(session);
   await maybeNotify(session);
@@ -155,6 +180,13 @@ app.post('/api/subscribe/:code', (req, res) => {
   res.json({ ok: true });
 });
 
+app.post('/api/register-token/:code', (req, res) => {
+  const session = sessions[req.params.code];
+  if (!session) return res.status(404).json({ error: 'Oturum bulunamadı' });
+  session.fcmToken = req.body.token;
+  res.json({ ok: true });
+});
+
 app.get('/api/status/:code', (req, res) => {
   const session = sessions[req.params.code];
   if (!session) return res.status(404).json({ error: 'Oturum bulunamadı' });
@@ -167,6 +199,7 @@ app.get('/api/status/:code', (req, res) => {
     etaMinutes: session.routeEtaMinutes ?? null,
     routeSource: session.routeSource ?? null,
     travelerLoc: session.travelerLoc,
+    note: session.note || '',
     mode: session.mode,
     expiresAt: session.expiresAt,
   });
@@ -178,20 +211,38 @@ app.get('/api/vapid-public-key', (req, res) => {
 
 async function maybeNotify(session) {
   if (session.notified) return;
-  if (!session.travelerLoc || !session.destLoc || !session.subscription) return;
+  if (!session.travelerLoc || !session.destLoc) return;
   if (session.routeEtaMinutes == null) return;
 
   const etaMinutes = session.routeEtaMinutes;
+  const threshold = session.notifyThresholdMin || 1;
 
-  if (etaMinutes <= 1) {
+  if (etaMinutes <= threshold) {
     session.notified = true;
-    const payload = JSON.stringify({
-      title: 'Neredeyse geldi!',
-      body: '1 dakika sonra yanınızda olacak.',
-    });
-    webpush.sendNotification(session.subscription, payload).catch((err) => {
-      console.error('Push gönderim hatası:', err.message);
-    });
+
+    const title = 'Yaklaşıyor!';
+    const noteText = session.note ? ` ("${session.note}")` : '';
+    const body = `${threshold} dakika sonra yanınızda olacak${noteText}`;
+
+    if (firebaseReady && messaging && session.fcmToken) {
+      try {
+        await messaging.send({
+          token: session.fcmToken,
+          notification: { title, body },
+          data: { title, body },
+          android: { priority: 'high' },
+        });
+      } catch (err) {
+        console.error('FCM gönderim hatası:', err.message);
+      }
+    }
+
+    if (session.subscription) {
+      const payload = JSON.stringify({ title, body });
+      webpush.sendNotification(session.subscription, payload).catch((err) => {
+        console.error('Web push gönderim hatası:', err.message);
+      });
+    }
   }
 }
 

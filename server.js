@@ -4,6 +4,7 @@ const fs = require('fs');
 const webpush = require('web-push');
 const { initializeApp, cert } = require('firebase-admin/app');
 const { getMessaging } = require('firebase-admin/messaging');
+const { getFirestore } = require('firebase-admin/firestore');
 
 const app = express();
 app.use(express.json());
@@ -11,6 +12,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 let firebaseReady = false;
 let messaging = null;
+let db = null;
 try {
   const secretFilePath = '/etc/secrets/firebase-service-account.json';
   let serviceAccount = null;
@@ -24,8 +26,9 @@ try {
   if (serviceAccount) {
     initializeApp({ credential: cert(serviceAccount) });
     messaging = getMessaging();
+    db = getFirestore();
     firebaseReady = true;
-    console.log('Firebase Admin başlatıldı.');
+    console.log('Firebase Admin başlatıldı (Firestore dahil).');
   } else {
     console.warn('Firebase servis hesabı bulunamadı, push bildirimleri devre dışı.');
   }
@@ -41,7 +44,6 @@ if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
 }
 
 const sessions = {};
-const users = {};
 
 function normalizePhone(raw) {
   if (!raw) return '';
@@ -132,45 +134,85 @@ const DURATIONS = {
   '600': 10 * 60 * 60 * 1000,
 };
 
-app.post('/api/register', (req, res) => {
+app.post('/api/register', async (req, res) => {
   const { phone, name, fcmToken } = req.body;
   const normalized = normalizePhone(phone);
   if (!normalized || !name) {
     return res.status(400).json({ error: 'Geçersiz isim veya telefon' });
   }
-  users[normalized] = { name, fcmToken: fcmToken || null };
-  res.json({ ok: true });
+  if (!db) return res.status(500).json({ error: 'Veritabanı hazır değil' });
+
+  try {
+    await db.collection('users').doc(normalized).set({
+      name,
+      fcmToken: fcmToken || null,
+      updatedAt: Date.now(),
+    });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Kayıt hatası:', err.message);
+    res.status(500).json({ error: 'Kayıt başarısız' });
+  }
 });
 
-app.post('/api/update-token', (req, res) => {
+app.post('/api/update-token', async (req, res) => {
   const { phone, fcmToken } = req.body;
   const normalized = normalizePhone(phone);
-  if (!normalized || !users[normalized]) return res.status(404).json({ error: 'Kullanıcı bulunamadı' });
-  users[normalized].fcmToken = fcmToken;
-  res.json({ ok: true });
+  if (!normalized || !db) return res.status(400).json({ error: 'Geçersiz istek' });
+
+  try {
+    const docRef = db.collection('users').doc(normalized);
+    const doc = await docRef.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Kullanıcı bulunamadı' });
+    await docRef.update({ fcmToken });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Token güncelleme hatası:', err.message);
+    res.status(500).json({ error: 'Güncelleme başarısız' });
+  }
 });
 
-app.post('/api/match-contacts', (req, res) => {
+app.post('/api/match-contacts', async (req, res) => {
   const { phones } = req.body;
   if (!Array.isArray(phones)) return res.status(400).json({ error: 'phones bir liste olmalı' });
+  if (!db) return res.status(500).json({ error: 'Veritabanı hazır değil' });
 
-  const matches = [];
-  for (const p of phones) {
-    const normalized = normalizePhone(p);
-    if (users[normalized]) {
-      matches.push({ phone: normalized, name: users[normalized].name });
-    }
+  try {
+    const normalizedPhones = [...new Set(phones.map(normalizePhone).filter(Boolean))];
+    if (normalizedPhones.length === 0) return res.json({ matches: [] });
+
+    const refs = normalizedPhones.map((p) => db.collection('users').doc(p));
+    const docs = await db.getAll(...refs);
+
+    const matches = [];
+    docs.forEach((doc) => {
+      if (doc.exists) {
+        matches.push({ phone: doc.id, name: doc.data().name });
+      }
+    });
+    res.json({ matches });
+  } catch (err) {
+    console.error('Eşleştirme hatası:', err.message);
+    res.status(500).json({ error: 'Eşleştirme başarısız' });
   }
-  res.json({ matches });
 });
 
 app.post('/api/invite', async (req, res) => {
   const { fromName, fromPhone, toPhone, mode, thresholdMin } = req.body;
   const normalizedTo = normalizePhone(toPhone);
-  const target = users[normalizedTo];
+  if (!db) return res.status(500).json({ error: 'Veritabanı hazır değil' });
 
-  if (!target) return res.status(404).json({ error: 'Kişi kayıtlı değil' });
-  if (!DURATIONS['600'] || !SPEEDS[mode]) return res.status(400).json({ error: 'Geçersiz mod' });
+  let target;
+  try {
+    const doc = await db.collection('users').doc(normalizedTo).get();
+    if (!doc.exists) return res.status(404).json({ error: 'Kişi kayıtlı değil' });
+    target = doc.data();
+  } catch (err) {
+    console.error('Davet - kullanıcı sorgu hatası:', err.message);
+    return res.status(500).json({ error: 'Sunucu hatası' });
+  }
+
+  if (!SPEEDS[mode]) return res.status(400).json({ error: 'Geçersiz mod' });
 
   const inviteId = generateCode();
   sessions[inviteId] = {

@@ -143,16 +143,15 @@ const DURATIONS = {
 };
 
 app.post('/api/register', async (req, res) => {
-  const { phone, name, fcmToken } = req.body;
+  const { phone, fcmToken } = req.body;
   const normalized = normalizePhone(phone);
-  if (!normalized || !name) {
-    return res.status(400).json({ error: 'Geçersiz isim veya telefon' });
+  if (!normalized) {
+    return res.status(400).json({ error: 'Geçersiz telefon' });
   }
   if (!db) return res.status(500).json({ error: 'Veritabanı hazır değil' });
 
   try {
     await db.collection('users').doc(normalized).set({
-      name,
       fcmToken: fcmToken || null,
       updatedAt: Date.now(),
     });
@@ -195,7 +194,7 @@ app.post('/api/match-contacts', async (req, res) => {
     const matches = [];
     docs.forEach((doc) => {
       if (doc.exists) {
-        matches.push({ phone: doc.id, name: doc.data().name });
+        matches.push({ phone: doc.id });
       }
     });
     res.json({ matches });
@@ -222,6 +221,7 @@ app.post('/api/invite', async (req, res) => {
 
   if (!SPEEDS[mode]) return res.status(400).json({ error: 'Geçersiz mod' });
 
+  const normalizedFrom = normalizePhone(fromPhone);
   const inviteId = generateCode();
   sessions[inviteId] = {
     travelerLoc: null,
@@ -235,7 +235,7 @@ app.post('/api/invite', async (req, res) => {
     notifyThresholdMin: (thresholdMin && thresholdMin >= 1 && thresholdMin <= 10) ? thresholdMin : 1,
     notified: false,
     accepted: false,
-    fromName: fromName || 'Biri',
+    fromPhone: normalizedFrom,
   };
 
   if (firebaseReady && messaging && target.fcmToken) {
@@ -244,12 +244,12 @@ app.post('/api/invite', async (req, res) => {
         token: target.fcmToken,
         notification: {
           title: 'Canlı Konum Daveti',
-          body: `${fromName || 'Biri'} sizinle canlı konumunu paylaşmak istiyor`,
+          body: 'Sizinle canlı konumunu paylaşmak istiyor',
         },
         data: {
           type: 'invite',
           inviteId,
-          fromName: fromName || 'Biri',
+          fromPhone: normalizedFrom,
         },
         android: { priority: 'high' },
       });
@@ -288,11 +288,12 @@ app.post('/api/invite/:id/arrived', async (req, res) => {
         token: session.fcmToken,
         notification: {
           title: 'Geldi! 🎉',
-          body: `${session.fromName} geldi, şükür kavuşturana!`,
+          body: 'Yanınızda, şükür kavuşturana!',
         },
         data: {
           type: 'arrived',
           inviteId: req.params.id,
+          fromPhone: session.fromPhone || '',
         },
         android: { priority: 'high' },
       });

@@ -1,26 +1,34 @@
 const express = require('express');
 const path = require('path');
+const fs = require('fs');
 const webpush = require('web-push');
+const admin = require('firebase-admin');
 
 const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// ---- VAPID (push bildirimi için kimlik anahtarları) ----
-const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY;
-const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY;
+// ---- Firebase Admin SDK (native uygulamaya push bildirimi göndermek için) ----
+let firebaseReady = false;
+try {
+  const secretFilePath = '/etc/secrets/firebase-service-account.json';
+  let serviceAccount = null;
 
-if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
-  webpush.setVapidDetails('mailto:test@example.com', VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
-}
+  if (fs.existsSync(secretFilePath)) {
+    serviceAccount = JSON.parse(fs.readFileSync(secretFilePath, 'utf8'));
+  } else if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+    serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+  }
 
-const sessions = {};
-
-function generateCode() {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let code = '';
-  for (let i = 0; i < 5; i++) code += chars[Math.floor(Math.random() * chars.length)];
-  return code;
+  if (serviceAccount) {
+    admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
+    firebaseReady = true;
+    console.log('Firebase Admin başlatıldı.');
+  } else {
+    console.warn('Firebase servis hesabı bulunamadı, push bildirimleri devre dışı.');
+  }
+} catch (err) {
+  console.error('Firebase Admin başlatma hatası:', err.message);
 }
 
 // Haversine formülü: iki koordinat arası KUŞ UÇUŞU mesafe (metre) - sadece API başarısız olursa yedek

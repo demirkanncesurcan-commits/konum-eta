@@ -267,6 +267,35 @@ app.post('/api/invite/:id/accept', async (req, res) => {
   res.json({ ok: true });
 });
 
+app.post('/api/invite/:id/arrived', async (req, res) => {
+  const session = sessions[req.params.id];
+  if (!session) return res.status(404).json({ error: 'Oturum bulunamadı' });
+  if (session.arrived) return res.json({ ok: true });
+
+  session.arrived = true;
+
+  if (firebaseReady && messaging && session.fcmToken) {
+    try {
+      await messaging.send({
+        token: session.fcmToken,
+        notification: {
+          title: 'Geldi! 🎉',
+          body: `${session.fromName} geldi, şükür kavuşturana!`,
+        },
+        data: {
+          type: 'arrived',
+          inviteId: req.params.id,
+        },
+        android: { priority: 'high' },
+      });
+    } catch (err) {
+      console.error('Varış push hatası:', err.message);
+    }
+  }
+
+  res.json({ ok: true });
+});
+
 app.post('/api/location/:code', async (req, res) => {
   const session = sessions[req.params.code];
   if (!session) return res.status(404).json({ error: 'Oturum bulunamadı' });
@@ -277,7 +306,7 @@ app.post('/api/location/:code', async (req, res) => {
   if (typeof note === 'string') session.note = note.slice(0, 100);
 
   await refreshRoute(session);
-  await maybeNotify(session);
+  await maybeNotify(session, req.params.code);
 
   res.json({ ok: true });
 });
@@ -319,6 +348,7 @@ app.get('/api/status/:code', (req, res) => {
     travelerLoc: session.travelerLoc,
     note: session.note || '',
     mode: session.mode,
+    arrived: session.arrived || false,
     expiresAt: session.expiresAt,
   });
 });
@@ -327,7 +357,7 @@ app.get('/api/vapid-public-key', (req, res) => {
   res.json({ key: VAPID_PUBLIC_KEY || null });
 });
 
-async function maybeNotify(session) {
+async function maybeNotify(session, sessionCode) {
   if (session.notified) return;
   if (!session.travelerLoc || !session.destLoc) return;
   if (session.routeEtaMinutes == null) return;
@@ -347,7 +377,7 @@ async function maybeNotify(session) {
         await messaging.send({
           token: session.fcmToken,
           notification: { title, body },
-          data: { title, body },
+          data: { title, body, type: 'threshold', inviteId: sessionCode || '' },
           android: { priority: 'high' },
         });
       } catch (err) {

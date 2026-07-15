@@ -275,6 +275,13 @@ app.post('/api/invite/:id/accept', async (req, res) => {
   res.json({ ok: true });
 });
 
+app.post('/api/invite/:id/decline', async (req, res) => {
+  const session = sessions[req.params.id];
+  if (!session) return res.status(404).json({ error: 'Davet bulunamadı' });
+  session.declined = true;
+  res.json({ ok: true });
+});
+
 app.post('/api/invite/:id/arrived', async (req, res) => {
   const session = sessions[req.params.id];
   if (!session) return res.status(404).json({ error: 'Oturum bulunamadı' });
@@ -359,6 +366,8 @@ app.get('/api/status/:code', (req, res) => {
     note: session.note || '',
     mode: session.mode,
     arrived: session.arrived || false,
+    accepted: session.accepted || false,
+    declined: session.declined || false,
     expiresAt: session.expiresAt,
   });
 });

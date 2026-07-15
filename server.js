@@ -77,9 +77,16 @@ const SPEEDS = {
   yaya: 5 * 1000 / 3600,
 };
 
+const TOMTOM_API_KEY = process.env.TOMTOM_API_KEY;
+
 async function fetchRealRoute(mode, lat1, lon1, lat2, lon2) {
-  const profilePath = mode === 'yaya' ? 'routed-foot/route/v1/foot' : 'routed-car/route/v1/driving';
-  const url = `https://routing.openstreetmap.de/${profilePath}/${lon1},${lat1};${lon2},${lat2}?overview=false`;
+  if (!TOMTOM_API_KEY) {
+    console.warn('TOMTOM_API_KEY tanımlı değil, yedek hesaba geçiliyor.');
+    return null;
+  }
+
+  const travelMode = mode === 'yaya' ? 'pedestrian' : 'car';
+  const url = `https://api.tomtom.com/routing/1/calculateRoute/${lat1},${lon1}:${lat2},${lon2}/json?key=${TOMTOM_API_KEY}&travelMode=${travelMode}&traffic=true`;
 
   try {
     const controller = new AbortController();
@@ -88,13 +95,14 @@ async function fetchRealRoute(mode, lat1, lon1, lat2, lon2) {
     clearTimeout(timeout);
     if (!res.ok) return null;
     const data = await res.json();
-    if (data.code !== 'Ok' || !data.routes || !data.routes[0]) return null;
+    const summary = data.routes?.[0]?.summary;
+    if (!summary) return null;
     return {
-      distanceMeters: data.routes[0].distance,
-      durationSeconds: data.routes[0].duration,
+      distanceMeters: summary.lengthInMeters,
+      durationSeconds: summary.travelTimeInSeconds,
     };
   } catch (err) {
-    console.error('OSRM rota hatası:', err.message);
+    console.error('TomTom rota hatası:', err.message);
     return null;
   }
 }
@@ -115,7 +123,7 @@ async function refreshRoute(session) {
     session.routeDistance = route.distanceMeters;
     session.routeEtaMinutes = route.durationSeconds / 60;
     session.routeUpdatedAt = now;
-    session.routeSource = 'osrm';
+    session.routeSource = 'tomtom';
   } else {
     const straight = straightLineDistance(
       session.travelerLoc.lat, session.travelerLoc.lon,

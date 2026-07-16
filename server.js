@@ -205,7 +205,7 @@ app.post('/api/match-contacts', async (req, res) => {
 });
 
 app.post('/api/invite', async (req, res) => {
-  const { fromName, fromPhone, toPhone, mode, thresholdMin } = req.body;
+  const { fromName, fromPhone, toPhone, mode, thresholdMin, destLat, destLon } = req.body;
   const normalizedTo = normalizePhone(toPhone);
   if (!db) return res.status(500).json({ error: 'Veritabanı hazır değil' });
 
@@ -221,11 +221,12 @@ app.post('/api/invite', async (req, res) => {
 
   if (!SPEEDS[mode]) return res.status(400).json({ error: 'Geçersiz mod' });
 
+  const isFixed = typeof destLat === 'number' && typeof destLon === 'number';
   const normalizedFrom = normalizePhone(fromPhone);
   const inviteId = generateCode();
   sessions[inviteId] = {
     travelerLoc: null,
-    destLoc: null,
+    destLoc: isFixed ? { lat: destLat, lon: destLon } : null,
     mode,
     note: '',
     createdAt: Date.now(),
@@ -235,6 +236,7 @@ app.post('/api/invite', async (req, res) => {
     notifyThresholdMin: (thresholdMin && thresholdMin >= 1 && thresholdMin <= 10) ? thresholdMin : 1,
     notified: false,
     accepted: false,
+    fixed: isFixed,
     fromPhone: normalizedFrom,
   };
 
@@ -250,6 +252,7 @@ app.post('/api/invite', async (req, res) => {
           type: 'invite',
           inviteId,
           fromPhone: normalizedFrom,
+          fixed: isFixed ? '1' : '0',
         },
         android: { priority: 'high' },
       });
@@ -262,6 +265,15 @@ app.post('/api/invite', async (req, res) => {
   }
 
   res.json({ inviteId });
+});
+
+app.post('/api/invite/:id/accept-fixed', async (req, res) => {
+  const session = sessions[req.params.id];
+  if (!session) return res.status(404).json({ error: 'Davet bulunamadı' });
+  const { fcmToken } = req.body;
+  session.fcmToken = fcmToken;
+  session.accepted = true;
+  res.json({ ok: true });
 });
 
 app.post('/api/request', async (req, res) => {

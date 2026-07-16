@@ -264,6 +264,70 @@ app.post('/api/invite', async (req, res) => {
   res.json({ inviteId });
 });
 
+app.post('/api/request', async (req, res) => {
+  const { fromPhone, toPhone, mode, thresholdMin, fromLat, fromLon, fcmToken } = req.body;
+  const normalizedTo = normalizePhone(toPhone);
+  if (!db) return res.status(500).json({ error: 'Veritabanı hazır değil' });
+
+  let target;
+  try {
+    const doc = await db.collection('users').doc(normalizedTo).get();
+    if (!doc.exists) return res.status(404).json({ error: 'Kişi kayıtlı değil' });
+    target = doc.data();
+  } catch (err) {
+    console.error('İstek - kullanıcı sorgu hatası:', err.message);
+    return res.status(500).json({ error: 'Sunucu hatası' });
+  }
+
+  if (!SPEEDS[mode]) return res.status(400).json({ error: 'Geçersiz mod' });
+  if (typeof fromLat !== 'number' || typeof fromLon !== 'number') {
+    return res.status(400).json({ error: 'Konum bilgisi eksik' });
+  }
+
+  const normalizedFrom = normalizePhone(fromPhone);
+  const inviteId = generateCode();
+  sessions[inviteId] = {
+    travelerLoc: null,
+    destLoc: { lat: fromLat, lon: fromLon },
+    mode,
+    note: '',
+    createdAt: Date.now(),
+    expiresAt: Date.now() + DURATIONS['600'],
+    subscription: null,
+    fcmToken: fcmToken || null,
+    notifyThresholdMin: (thresholdMin && thresholdMin >= 1 && thresholdMin <= 10) ? thresholdMin : 1,
+    notified: false,
+    accepted: false,
+    kind: 'request',
+    fromPhone: normalizedFrom,
+  };
+
+  if (firebaseReady && messaging && target.fcmToken) {
+    try {
+      await messaging.send({
+        token: target.fcmToken,
+        notification: {
+          title: 'Canlı Konum İsteği',
+          body: 'Sizden canlı konumunuzu istiyor',
+        },
+        data: {
+          type: 'request',
+          inviteId,
+          fromPhone: normalizedFrom,
+        },
+        android: { priority: 'high' },
+      });
+    } catch (err) {
+      console.error('İstek push hatası:', err.message);
+      return res.status(500).json({ error: 'Bildirim gönderilemedi' });
+    }
+  } else {
+    return res.status(500).json({ error: 'Bildirim sistemi hazır değil' });
+  }
+
+  res.json({ inviteId });
+});
+
 app.post('/api/invite/:id/accept', async (req, res) => {
   const session = sessions[req.params.id];
   if (!session) return res.status(404).json({ error: 'Davet bulunamadı' });
@@ -272,6 +336,13 @@ app.post('/api/invite/:id/accept', async (req, res) => {
   session.fcmToken = fcmToken;
   session.accepted = true;
   await refreshRoute(session);
+  res.json({ ok: true });
+});
+
+app.post('/api/invite/:id/accept-request', async (req, res) => {
+  const session = sessions[req.params.id];
+  if (!session) return res.status(404).json({ error: 'İstek bulunamadı' });
+  session.accepted = true;
   res.json({ ok: true });
 });
 

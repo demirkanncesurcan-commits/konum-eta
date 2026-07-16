@@ -282,6 +282,13 @@ app.post('/api/invite/:id/decline', async (req, res) => {
   res.json({ ok: true });
 });
 
+app.post('/api/invite/:id/stop', async (req, res) => {
+  const session = sessions[req.params.id];
+  if (!session) return res.status(404).json({ error: 'Oturum bulunamadı' });
+  session.expiresAt = Date.now();
+  res.json({ ok: true });
+});
+
 app.post('/api/invite/:id/arrived', async (req, res) => {
   const session = sessions[req.params.id];
   if (!session) return res.status(404).json({ error: 'Oturum bulunamadı' });
